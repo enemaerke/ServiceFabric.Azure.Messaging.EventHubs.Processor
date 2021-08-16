@@ -1,21 +1,18 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.using System;
+﻿using Microsoft.ServiceFabric.Data;
+using Microsoft.ServiceFabric.Data.Collections;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
+namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    using Microsoft.ServiceFabric.Data;
-    using Microsoft.ServiceFabric.Data.Collections;
-    using System;
-    using System.Collections.Generic;
-    using System.Threading;
-    using System.Threading.Tasks;
-
-    class ReliableDictionaryCheckpointMananger : ICheckpointMananger
+    class ReliableDictionaryCheckpointManager : ICheckpointMananger
     {
         private IReliableStateManager reliableStateManager = null;
         private IReliableDictionary<string, Dictionary<string, object>> store = null;
 
-        internal ReliableDictionaryCheckpointMananger(IReliableStateManager rsm)
+        internal ReliableDictionaryCheckpointManager(IReliableStateManager rsm)
         {
             this.reliableStateManager = rsm;
         }

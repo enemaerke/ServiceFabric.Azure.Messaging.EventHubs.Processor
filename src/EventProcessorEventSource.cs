@@ -1,12 +1,9 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.using System;
+﻿using System;
+using System.Diagnostics.Tracing;
+using System.Fabric;
 
-namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
+namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    using System;
-    using System.Diagnostics.Tracing;
-    using System.Fabric;
-
     [EventSource(Name = "Microsoft-Azure-EventHubs-ServiceFabricProcessor")]
     internal sealed class EventProcessorEventSource : EventSource
     {

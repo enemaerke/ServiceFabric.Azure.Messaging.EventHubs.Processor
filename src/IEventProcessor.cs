@@ -1,13 +1,10 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
+namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Threading;
-    using System.Threading.Tasks;
-
     /// <summary>
     /// Interface for processing events.
     /// </summary>
@@ -19,7 +16,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// <param name="cancellationToken"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        abstract public Task OpenAsync(CancellationToken cancellationToken, PartitionContext context);
+        public abstract Task OpenAsync(CancellationToken cancellationToken, PartitionContext context);
 
         /// <summary>
         /// Called on shutdown.
@@ -27,7 +24,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// <param name="context"></param>
         /// <param name="reason"></param>
         /// <returns></returns>
-        abstract public Task CloseAsync(PartitionContext context, CloseReason reason);
+        public abstract Task CloseAsync(PartitionContext context, CloseReason reason);
 
         /// <summary>
         /// Called when events are available.
@@ -36,7 +33,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// <param name="context"></param>
         /// <param name="events"></param>
         /// <returns></returns>
-        abstract public Task ProcessEventsAsync(CancellationToken cancellationToken, PartitionContext context, IEnumerable<EventData> events);
+        public abstract Task ProcessEventsAsync(CancellationToken cancellationToken, PartitionContext context, IEnumerable<EventData> events);
 
         /// <summary>
         /// Called when an error occurs.
@@ -44,7 +41,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// <param name="context"></param>
         /// <param name="error"></param>
         /// <returns></returns>
-        abstract public Task ProcessErrorAsync(PartitionContext context, Exception error);
+        public abstract Task ProcessErrorAsync(PartitionContext context, Exception error);
 
         /// <summary>
         /// Called periodically to get user-supplied load metrics.
@@ -52,7 +49,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// <param name="cancellationToken"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        virtual public Dictionary<string, int> GetLoadMetric(CancellationToken cancellationToken, PartitionContext context)
+        public virtual Dictionary<string, int> GetLoadMetric(CancellationToken cancellationToken, PartitionContext context)
         {
             // By default all partitions have a metric of named CountOfPartitions with value 1. If Service Fabric is configured to use this metric,
             // it will balance primaries across nodes simply by the number of primaries on a node. This can be overridden to return

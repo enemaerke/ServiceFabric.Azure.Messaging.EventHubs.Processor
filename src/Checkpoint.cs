@@ -1,11 +1,8 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.using System;
+﻿using System;
+using System.Collections.Generic;
 
-namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
+namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    using System;
-    using System.Collections.Generic;
-
     /// <summary>
     /// A persistable representation of what events in the stream have been processed.
     /// Version 1 checkpoint is just a high-water mark, containing an offset and sequence number. All events at or lower than the given position
@@ -81,7 +78,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
         /// </summary>
         /// <param name="dictionary">Serialized representation.</param>
         /// <returns>Deserialized instance.</returns>
-        static public Checkpoint CreateFromDictionary(Dictionary<string, object> dictionary)
+        public static Checkpoint CreateFromDictionary(Dictionary<string, object> dictionary)
         {
             int version = (int)dictionary[Constants.CheckpointPropertyVersion];
             bool valid = (bool)dictionary[Constants.CheckpointPropertyValid];

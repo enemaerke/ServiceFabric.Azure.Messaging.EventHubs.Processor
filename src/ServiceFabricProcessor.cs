@@ -1,17 +1,14 @@
-﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Fabric;
+using System.Fabric.Description;
+using System.Fabric.Query;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.ServiceFabric.Data;
 
-namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
+namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Fabric;
-    using System.Fabric.Description;
-    using System.Fabric.Query;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.ServiceFabric.Data;
-
     /// <summary>
     /// Base class that implements event processor functionality.
     /// </summary>
@@ -103,7 +100,7 @@ namespace Microsoft.Azure.EventHubs.ServiceFabricProcessor
             this.consumerGroupName = eventHubConsumerGroup;
 
             this.options = options ?? new EventProcessorOptions();
-            this.checkpointManager = checkpointManager ?? new ReliableDictionaryCheckpointMananger(this.serviceStateManager);
+            this.checkpointManager = checkpointManager ?? new ReliableDictionaryCheckpointManager(this.serviceStateManager);
 
             this.EventHubClientFactory = new EventHubWrappers.EventHubClientFactory();
             this.TestMode = false;
