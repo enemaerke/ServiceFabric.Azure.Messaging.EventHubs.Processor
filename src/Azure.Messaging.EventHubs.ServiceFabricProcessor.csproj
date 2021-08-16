@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+
+   <!-- Because Service Fabric is involved, force the platform to x64. -->
+   <PropertyGroup>
+     <Platform>x64</Platform>
+     <PlatformTarget>x64</PlatformTarget>
+   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ServiceFabric" />
+    <PackageReference Include="Microsoft.ServiceFabric.Data" />
+    <PackageReference Include="Microsoft.ServiceFabric.Services" />
+  </ItemGroup>
+</Project>
