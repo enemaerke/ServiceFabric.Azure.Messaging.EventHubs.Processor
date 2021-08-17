@@ -2,6 +2,25 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1</TargetFrameworks>
     <Platforms>AnyCPU;x64</Platforms>
+    <PackageId>Azure.Messaging.EventHubs.ServiceFabricProcessor</PackageId>
+    <Authors>enemaerke</Authors>
+    <Title>ServiceFabric based processor for Azure EventHubs</Title>
+    <Description>An updated implementation of the ServiceFabric based EventHub processor, aligning with the new client library designs</Description>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright 2021</Copyright>
+    <PackageTags>ServiceFabric Azure EventHubs</PackageTags>
+    <AssemblyName>Azure.Messaging.EventHubs.ServiceFabricProcessor</AssemblyName>
+    <RootNamespace>Azure.Messaging.EventHubs.ServiceFabricProcessor</RootNamespace>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>1.0.0</Version>
+    <PackageProjectUrl>https://github.com/enemaerke/Azure.Messaging.EventHubs.ServiceFabricProcessor</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <RepositoryUrl>https://github.com/enemaerke/Azure.Messaging.EventHubs.ServiceFabricProcessor</RepositoryUrl>
+    <PackageDescription>An updated implementation of the ServiceFabric based EventHub processor, aligning with the new client library designs</PackageDescription>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company />
   </PropertyGroup>
 
    <!-- Because Service Fabric is involved, force the platform to x64. -->
