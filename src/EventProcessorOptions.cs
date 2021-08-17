@@ -73,6 +73,11 @@ namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
         public bool AttemptCheckpointMigrationFromOldFormat { get; set; }
 
         /// <summary>
+        /// For testing purposes, allows for consuming when less service fabric partitions than eventhub partitions
+        /// </summary>
+        public bool TestMode { get; set; }
+
+        /// <summary>
         /// TODO -- is this needed? It's called just before SFP.RunAsync throws out/returns to user code anyway.
         /// But user code won't see that until it awaits the Task, so maybe this is useful?
         /// </summary>

@@ -273,8 +273,19 @@ namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
                 options.Logging?.Message("Out of retries getting event hub info");
                 throw new Exception("Out of retries getting event hub runtime info", lastException);
             }
-            
-            if (eventHubProperties.PartitionIds.Length != partitionInfo.ServicePartitionCount)
+            if (options.TestMode)
+            {
+                if (partitionInfo.ServicePartitionCount > eventHubProperties.PartitionIds.Length)
+                {
+                    options.Logging?.Message("TestMode requires event hub partition count larger than service partition count");
+                    throw new EventProcessorConfigurationException("TestMode requires event hub partition count larger than service partition count");
+                }
+                if (partitionInfo.ServicePartitionCount < eventHubProperties.PartitionIds.Length)
+                {
+                    options.Logging?.Message("TestMode: receiving from subset of event hub");
+                }
+            }
+            else if (eventHubProperties.PartitionIds.Length != partitionInfo.ServicePartitionCount)
             {
                 options.Logging?.Message($"Service partition count {partitionInfo.ServicePartitionCount} does not match event hub partition count {eventHubProperties.PartitionIds.Length}");
                 throw new EventProcessorConfigurationException($"Service partition count {partitionInfo.ServicePartitionCount} does not match event hub partition count {eventHubProperties.PartitionIds.Length}");
