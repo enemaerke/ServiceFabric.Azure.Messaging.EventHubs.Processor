@@ -1,11 +1,11 @@
-﻿using Microsoft.ServiceFabric.Data;
-using Microsoft.ServiceFabric.Data.Collections;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.ServiceFabric.Data;
+using Microsoft.ServiceFabric.Data.Collections;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     class ReliableDictionaryCheckpointManager : ICheckpointManager
     {

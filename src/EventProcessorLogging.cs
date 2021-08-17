@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Encapsulating the logging, allow for delegating out to consumers logging system

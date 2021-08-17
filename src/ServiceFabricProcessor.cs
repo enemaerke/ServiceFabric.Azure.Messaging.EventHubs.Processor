@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Messaging.EventHubs;
 using Azure.Messaging.EventHubs.Consumer;
 using Azure.Messaging.EventHubs.Primitives;
 using Microsoft.ServiceFabric.Data;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Base class that implements event processor functionality.

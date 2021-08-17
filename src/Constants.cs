@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     class Constants
     {

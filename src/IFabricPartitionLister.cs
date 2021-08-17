@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// 

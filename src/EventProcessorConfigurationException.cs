@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Exception thrown when the configuration of the service has a problem.

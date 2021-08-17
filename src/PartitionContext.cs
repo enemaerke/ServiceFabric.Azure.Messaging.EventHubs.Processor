@@ -1,7 +1,8 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
+using Azure.Messaging.EventHubs;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Passed to an event processor instance to describe the environment.

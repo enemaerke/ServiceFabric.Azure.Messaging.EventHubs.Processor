@@ -1,7 +1,7 @@
 ﻿using System;
 using Azure.Messaging.EventHubs.Consumer;
 
-namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Type used for OnShutdown property.

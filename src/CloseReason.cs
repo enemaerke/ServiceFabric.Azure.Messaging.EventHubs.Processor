@@ -1,4 +1,4 @@
-﻿namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
+﻿namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
 {
     /// <summary>
     /// Why the event processor is being shut down.
