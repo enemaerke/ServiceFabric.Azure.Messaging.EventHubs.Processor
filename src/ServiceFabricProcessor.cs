@@ -185,39 +185,41 @@ namespace ServiceFabric.Azure.Messaging.EventHubs.Processor
                     PrefetchCount = options.PrefetchCount,
                     TrackLastEnqueuedEventProperties = true,
                 };
-                await using(var receiver = new PartitionReceiver(
+                var receiver = new PartitionReceiver(
                     this.consumerGroupName,
                     hubPartitionId,
                     initialPosition,
                     this.eventHubConnection.ToString(),
                     this.eventHubConnection.EventHubName,
-                    partitionReceiverOptions))
+                    partitionReceiverOptions);
+                try
                 {
-                    try
-                    {
-                        // Call Open on user's event processor instance.
-                        // If user's Open code fails, treat that as a fatal exception and let it throw out.
-                        //
-                        options.Logging?.Message("Creating event processor");
-                        await this.userEventProcessor.OpenAsync(this.linkedCancellationToken, this.partitionContext).ConfigureAwait(false);
-                        processorOpened = true;
-                        options.Logging?.Message("Event processor created and opened OK");
+                    // Call Open on user's event processor instance.
+                    // If user's Open code fails, treat that as a fatal exception and let it throw out.
+                    //
+                    options.Logging?.Message("Creating event processor");
+                    await this.userEventProcessor.OpenAsync(this.linkedCancellationToken, this.partitionContext).ConfigureAwait(false);
+                    processorOpened = true;
+                    options.Logging?.Message("Event processor created and opened OK");
 
-                        while (!linkedCancellationToken.IsCancellationRequested)
-                        {
-                            IEnumerable<EventData> eventBatch = await receiver.ReceiveBatchAsync(
-                                options.MaxBatchSize,
-                                options.ReceiveTimeout,
-                                linkedCancellationToken);
-
-                            await this.ProcessEventsAsync(hubPartitionId, eventBatch);
-                        }
-                    }
-                    catch (TaskCanceledException)
+                    while (!linkedCancellationToken.IsCancellationRequested)
                     {
-                        // This is expected if the cancellation token is
-                        // signaled.
+                        IEnumerable<EventData> eventBatch = await receiver.ReceiveBatchAsync(
+                            options.MaxBatchSize,
+                            options.ReceiveTimeout,
+                            linkedCancellationToken);
+
+                        await this.ProcessEventsAsync(hubPartitionId, eventBatch);
                     }
+                }
+                catch (TaskCanceledException)
+                {
+                    // This is expected if the cancellation token is
+                    // signaled.
+                }
+                finally
+                {
+                    await receiver.DisposeAsync();
                 }
             }
             finally
