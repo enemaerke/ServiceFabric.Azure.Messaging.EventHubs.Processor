@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
     <Platforms>AnyCPU;x64</Platforms>
     <PackageId>ServiceFabric.Azure.Messaging.EventHubs.Processor</PackageId>
     <Authors>enemaerke</Authors>
