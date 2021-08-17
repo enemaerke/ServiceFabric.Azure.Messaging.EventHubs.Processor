@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Fabric;
-using System.Fabric.Description;
-using System.Fabric.Query;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure.Messaging.EventHubs.Consumer;
 using Microsoft.ServiceFabric.Data;
 
 namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
@@ -12,34 +10,28 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
     /// <summary>
     /// Base class that implements event processor functionality.
     /// </summary>
-    public class ServiceFabricProcessor : IPartitionReceiveHandler
+    public class ServiceFabricProcessor
     {
         // Service Fabric objects initialized in constructor
-        private readonly IReliableStateManager serviceStateManager;
         private readonly Uri serviceFabricServiceName;
         private readonly Guid serviceFabricPartitionId;
-        private readonly IStatefulServicePartition servicePartition;
 
         // ServiceFabricProcessor settings initialized in constructor
         private readonly IEventProcessor userEventProcessor;
         private readonly EventProcessorOptions options;
-        private readonly ICheckpointMananger checkpointManager;
+        private readonly ICheckpointManager checkpointManager;
+
+        // EventHub settings initialized in constructor
+        private readonly string consumerGroupName;
+        private readonly EventHubConnection eventHubConnection;
 
         // Initialized during RunAsync startup
-        private int fabricPartitionOrdinal = -1;
-        private int servicePartitionCount = -1;
-        private string hubPartitionId;
         private PartitionContext partitionContext;
-        private string initialOffset;
-        private CancellationTokenSource internalCanceller;
-        private Exception internalFatalException;
+        private CancellationTokenSource internalCancellationTokenSource;
         private CancellationToken linkedCancellationToken;
-        private EventHubsConnectionStringBuilder ehConnectionString;
-        private string consumerGroupName;
 
         // Value managed by RunAsync
-        private int running = 0;
-
+        private int running;
 
         /// <summary>
         /// Constructor. Arguments break down into three groups: (1) Service Fabric objects so this library can access
@@ -50,36 +42,36 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <param name="serviceFabricServiceName">Service Fabric Uri found in StatefulServiceContext</param>
         /// <param name="serviceFabricPartitionId">Service Fabric partition id found in StatefulServiceContext</param>
         /// <param name="stateManager">Service Fabric-provided state manager, provides access to reliable dictionaries</param>
-        /// <param name="partition">Service Fabric-provided partition information</param>
         /// <param name="userEventProcessor">User's event processor implementation</param>
         /// <param name="eventHubConnectionString">Connection string for user's event hub</param>
         /// <param name="eventHubConsumerGroup">Name of event hub consumer group to receive from</param>
         /// <param name="options">Optional: Options structure for ServiceFabricProcessor library</param>
         /// <param name="checkpointManager">Very advanced/optional: user-provided checkpoint manager implementation</param>
-        public ServiceFabricProcessor(Uri serviceFabricServiceName, Guid serviceFabricPartitionId, IReliableStateManager stateManager, IStatefulServicePartition partition, IEventProcessor userEventProcessor,
-            string eventHubConnectionString, string eventHubConsumerGroup,
-            EventProcessorOptions options = null, ICheckpointMananger checkpointManager = null)
+        public ServiceFabricProcessor(
+            Uri serviceFabricServiceName,
+            Guid serviceFabricPartitionId,
+            IReliableStateManager stateManager,
+            IEventProcessor userEventProcessor,
+            string eventHubConnectionString,
+            string eventHubConsumerGroup,
+            EventProcessorOptions options = null,
+            ICheckpointManager checkpointManager = null)
         {
             if (serviceFabricServiceName == null)
             {
-                throw new ArgumentNullException("serviceFabricServiceName is null");
+                throw new ArgumentNullException(nameof(serviceFabricServiceName));
             }
+
             if (serviceFabricPartitionId == null)
             {
-                throw new ArgumentNullException("serviceFabricPartitionId is null");
+                throw new ArgumentNullException(nameof(serviceFabricPartitionId));
             }
+
             if (stateManager == null)
             {
-                throw new ArgumentNullException("stateManager is null");
+                throw new ArgumentNullException(nameof(stateManager));
             }
-            if (partition == null)
-            {
-                throw new ArgumentNullException("partition is null");
-            }
-            if (userEventProcessor == null)
-            {
-                throw new ArgumentNullException("userEventProcessor is null");
-            }
+
             if (string.IsNullOrEmpty(eventHubConnectionString))
             {
                 throw new ArgumentException("eventHubConnectionString is null or empty");
@@ -91,36 +83,15 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 
             this.serviceFabricServiceName = serviceFabricServiceName;
             this.serviceFabricPartitionId = serviceFabricPartitionId;
-            this.serviceStateManager = stateManager;
-            this.servicePartition = partition;
 
-            this.userEventProcessor = userEventProcessor;
+            this.userEventProcessor = userEventProcessor ?? throw new ArgumentNullException(nameof(userEventProcessor));
 
-            this.ehConnectionString = new EventHubsConnectionStringBuilder(eventHubConnectionString);
+            this.eventHubConnection = new EventHubConnection(eventHubConnectionString);
             this.consumerGroupName = eventHubConsumerGroup;
 
             this.options = options ?? new EventProcessorOptions();
-            this.checkpointManager = checkpointManager ?? new ReliableDictionaryCheckpointManager(this.serviceStateManager);
-
-            this.EventHubClientFactory = new EventHubWrappers.EventHubClientFactory();
-            this.TestMode = false;
-            this.MockMode = null;
+            this.checkpointManager = checkpointManager ?? new ReliableDictionaryCheckpointManager(stateManager, this.options.Logging);
         }
-
-        /// <summary>
-        /// For testing purposes. Do not change after calling RunAsync.
-        /// </summary>
-        public EventHubWrappers.IEventHubClientFactory EventHubClientFactory { get; set; }
-
-        /// <summary>
-        /// For testing purposes. Do not change after calling RunAsync.
-        /// </summary>
-        public bool TestMode { get; set; }
-
-        /// <summary>
-        /// For testing purposes. Do not change after calling RunAsync.
-        /// </summary>
-        public IFabricPartitionLister MockMode { get; set; }
 
         /// <summary>
         /// Starts processing of events.
@@ -131,18 +102,17 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         {
             if (Interlocked.Exchange(ref this.running, 1) == 1)
             {
-                EventProcessorEventSource.Current.Message("Already running");
+                options.Logging?.Message("Already running");
                 throw new InvalidOperationException("EventProcessorService.RunAsync has already been called.");
             }
 
-            this.internalCanceller = new CancellationTokenSource();
-            this.internalFatalException = null;
+            this.internalCancellationTokenSource = new CancellationTokenSource();
 
             try
             {
-                using (CancellationTokenSource linkedCanceller = CancellationTokenSource.CreateLinkedTokenSource(fabricCancellationToken, this.internalCanceller.Token))
+                using (CancellationTokenSource cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(fabricCancellationToken, this.internalCancellationTokenSource.Token))
                 {
-                    this.linkedCancellationToken = linkedCanceller.Token;
+                    this.linkedCancellationToken = cancellationTokenSource.Token;
                     
                     await InnerRunAsync().ConfigureAwait(false);
 
@@ -154,132 +124,95 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 // If InnerRunAsync throws, that is intended to be a fatal exception for this instance.
                 // Catch it here just long enough to log and notify, then rethrow.
 
-                EventProcessorEventSource.Current.Message("THROWING OUT: {0}", e);
+                options.Logging?.Message($"THROWING OUT: {e}");
                 if (e.InnerException != null)
                 {
-                    EventProcessorEventSource.Current.Message("THROWING OUT INNER: {0}", e.InnerException);
+                    options.Logging?.Message($"THROWING OUT INNER: {e.InnerException}");
                 }
                 this.options.NotifyOnShutdown(e);
-                throw e;
+
+                throw;
             }
         }
 
         private async Task InnerRunAsync()
         {
-            EventHubWrappers.IEventHubClient ehclient = null;
-            EventHubWrappers.IPartitionReceiver receiver = null;
             bool processorOpened = false;
+            EventHubConsumerClient consumerClient = null;
 
             try
             {
                 //
                 // Get Service Fabric partition information.
                 //
-                await GetServicePartitionId(this.linkedCancellationToken).ConfigureAwait(false);
+                var partitionInfo = await GetServicePartitionId(this.linkedCancellationToken).ConfigureAwait(false);
 
                 //
-                // Create EventHubClient and check partition count.
+                // Create EventHubConsumerClient and check partition count.
                 //
-                Exception lastException = null;
-                EventProcessorEventSource.Current.Message("Creating event hub client");
-                lastException = RetryWrapper(() => { ehclient = this.EventHubClientFactory.Create(this.ehConnectionString.ToString(), this.options.ReceiveTimeout); });
-                if (ehclient == null)
-                {
-                    EventProcessorEventSource.Current.Message("Out of retries event hub client");
-                    throw new Exception("Out of retries creating EventHubClient", lastException);
-                }
-                EventProcessorEventSource.Current.Message("Event hub client OK");
-                EventProcessorEventSource.Current.Message("Getting event hub info");
-                EventHubRuntimeInformation ehInfo = null;
-                // Lambda MUST be synchronous to work with RetryWrapper!
-                lastException = RetryWrapper(() => { ehInfo = ehclient.GetRuntimeInformationAsync().Result; });
-                if (ehInfo == null)
-                {
-                    EventProcessorEventSource.Current.Message("Out of retries getting event hub info");
-                    throw new Exception("Out of retries getting event hub runtime info", lastException);
-                }
-                if (this.TestMode)
-                {
-                    if (this.servicePartitionCount > ehInfo.PartitionCount)
-                    {
-                        EventProcessorEventSource.Current.Message("TestMode requires event hub partition count larger than service partitinon count");
-                        throw new EventProcessorConfigurationException("TestMode requires event hub partition count larger than service partitinon count");
-                    }
-                    else if (this.servicePartitionCount < ehInfo.PartitionCount)
-                    {
-                        EventProcessorEventSource.Current.Message("TestMode: receiving from subset of event hub");
-                    }
-                }
-                else if (ehInfo.PartitionCount != this.servicePartitionCount)
-                {
-                    EventProcessorEventSource.Current.Message($"Service partition count {this.servicePartitionCount} does not match event hub partition count {ehInfo.PartitionCount}");
-                    throw new EventProcessorConfigurationException($"Service partition count {this.servicePartitionCount} does not match event hub partition count {ehInfo.PartitionCount}");
-                }
-                this.hubPartitionId = ehInfo.PartitionIds[this.fabricPartitionOrdinal];
-
+                consumerClient = CreateConsumerClient();
+                var hubPartitionId = GetHubPartitionId(consumerClient, partitionInfo);
+                
                 //
                 // Generate a PartitionContext now that the required info is available.
                 //
-                this.partitionContext = new PartitionContext(this.linkedCancellationToken, this.hubPartitionId, this.ehConnectionString.EntityPath, this.consumerGroupName, this.checkpointManager);
+                this.partitionContext = new PartitionContext(
+                    this.linkedCancellationToken,
+                    hubPartitionId,
+                    this.eventHubConnection.EventHubName,
+                    this.consumerGroupName,
+                    this.checkpointManager);
 
                 //
                 // Start up checkpoint manager and get checkpoint, if any.
                 //
-                await CheckpointStartup(this.linkedCancellationToken).ConfigureAwait(false);
+                long? initialOffSet = await GetInitialOffsetFromCheckpointAtStartup(hubPartitionId, this.linkedCancellationToken).ConfigureAwait(false);
 
                 //
                 // If there was a checkpoint, the offset is in this.initialOffset, so convert it to an EventPosition.
                 // If no checkpoint, get starting point from user-supplied provider.
                 //
-                EventPosition initialPosition = null;
-                if (this.initialOffset != null)
+                EventPosition initialPosition = GetEventPosition(initialOffSet, hubPartitionId); 
+
+                //
+                // Create batch receiver.
+                //
+                await using(var receiver = new Primitives.PartitionReceiver(
+                    this.consumerGroupName,
+                    hubPartitionId,
+                    initialPosition,
+                    this.eventHubConnection.ToString(),
+                    this.eventHubConnection.EventHubName))
                 {
-                    EventProcessorEventSource.Current.Message($"Initial position from checkpoint, offset {this.initialOffset}");
-                    initialPosition = EventPosition.FromOffset(this.initialOffset);
+                    try
+                    {
+                        // Call Open on user's event processor instance.
+                        // If user's Open code fails, treat that as a fatal exception and let it throw out.
+                        //
+                        options.Logging?.Message("Creating event processor");
+                        await this.userEventProcessor.OpenAsync(this.linkedCancellationToken, this.partitionContext).ConfigureAwait(false);
+                        processorOpened = true;
+                        options.Logging?.Message("Event processor created and opened OK");
+
+                        while (!linkedCancellationToken.IsCancellationRequested)
+                        {
+                            IEnumerable<EventData> eventBatch = await receiver.ReceiveBatchAsync(
+                                options.MaxBatchSize,
+                                options.ReceiveTimeout,
+                                linkedCancellationToken);
+
+                            if (eventBatch != null)
+                            {
+                                await this.ProcessEventsAsync(hubPartitionId, eventBatch);
+                            }
+                        }
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // This is expected if the cancellation token is
+                        // signaled.
+                    }
                 }
-                else
-                {
-                    initialPosition = this.options.InitialPositionProvider(this.hubPartitionId);
-                    EventProcessorEventSource.Current.Message("Initial position from provider");
-                }
-
-                //
-                // Create receiver.
-                //
-                EventProcessorEventSource.Current.Message("Creating receiver");
-                lastException = RetryWrapper(() => { receiver = ehclient.CreateEpochReceiver(this.consumerGroupName, this.hubPartitionId, initialPosition,
-                    Constants.FixedReceiverEpoch, this.options.ClientReceiverOptions); });
-                if (receiver == null)
-                {
-                    EventProcessorEventSource.Current.Message("Out of retries creating receiver");
-                    throw new Exception("Out of retries creating event hub receiver", lastException);
-                }
-                receiver.PrefetchCount = this.options.PrefetchCount;
-
-                //
-                // Call Open on user's event processor instance.
-                // If user's Open code fails, treat that as a fatal exception and let it throw out.
-                //
-                EventProcessorEventSource.Current.Message("Creating event processor");
-                await this.userEventProcessor.OpenAsync(this.linkedCancellationToken, this.partitionContext).ConfigureAwait(false);
-                processorOpened = true;
-                EventProcessorEventSource.Current.Message("Event processor created and opened OK");
-
-                //
-                // Start metrics reporting. This runs as a separate background thread.
-                //
-                Thread t = new Thread(this.MetricsHandler);
-                t.Start();
-
-                //
-                // Receive pump.
-                //
-                EventProcessorEventSource.Current.Message("RunAsync setting handler and waiting");
-                this.MaxBatchSize = this.options.MaxBatchSize;
-                receiver.SetReceiveHandler(this, this.options.InvokeProcessorAfterReceiveTimeout);
-                this.linkedCancellationToken.WaitHandle.WaitOne();
-
-                EventProcessorEventSource.Current.Message("RunAsync continuing, cleanup");
             }
             finally
             {
@@ -291,37 +224,78 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                     }
                     catch (Exception e)
                     {
-                        EventProcessorEventSource.Current.Message($"IEventProcessor.CloseAsync threw {e}, continuing cleanup");
+                        options.Logging?.Message($"IEventProcessor.CloseAsync threw {e}, continuing cleanup");
                     }
                 }
-                if (receiver != null)
+                if (consumerClient != null)
                 {
                     try
                     {
-                        receiver.SetReceiveHandler(null);
-                        await receiver.CloseAsync().ConfigureAwait(false);
+                        await consumerClient.CloseAsync(CancellationToken.None).ConfigureAwait(false);
                     }
                     catch (Exception e)
                     {
-                        EventProcessorEventSource.Current.Message($"Receiver close threw {e}, continuing cleanup");
+                        options.Logging?.Message($"EventHubClient close threw {e}, continuing cleanup");
                     }
-                }
-                if (ehclient != null)
-                {
-                    try
-                    {
-                        await ehclient.CloseAsync().ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        EventProcessorEventSource.Current.Message($"EventHubClient close threw {e}, continuing cleanup");
-                    }
-                }
-                if (this.internalFatalException != null)
-                {
-                    throw this.internalFatalException;
                 }
             }
+        }
+
+        private EventPosition GetEventPosition(long? offset, string hubPartitionId)
+        {
+            if (offset != null)
+            {
+                options.Logging?.Message($"Initial position from checkpoint, offset {offset.Value}");
+                return EventPosition.FromOffset(offset.Value);
+            }
+
+            options.Logging?.Message("Initial position from provider");
+            return this.options.InitialPositionProvider(hubPartitionId);
+        }
+
+        private string GetHubPartitionId(EventHubConsumerClient consumerClient, PartitionInformation partitionInfo)
+        {
+            options.Logging?.Message("Getting event hub info");
+            EventHubProperties eventHubProperties = null;
+
+            // Lambda MUST be synchronous to work with RetryWrapper!
+            var lastException = RetryWrapper(() => { eventHubProperties = consumerClient.GetEventHubPropertiesAsync(linkedCancellationToken).Result; });
+            if (eventHubProperties == null)
+            {
+                options.Logging?.Message("Out of retries getting event hub info");
+                throw new Exception("Out of retries getting event hub runtime info", lastException);
+            }
+            
+            if (eventHubProperties.PartitionIds.Length != partitionInfo.ServicePartitionCount)
+            {
+                options.Logging?.Message($"Service partition count {partitionInfo.ServicePartitionCount} does not match event hub partition count {eventHubProperties.PartitionIds.Length}");
+                throw new EventProcessorConfigurationException($"Service partition count {partitionInfo.ServicePartitionCount} does not match event hub partition count {eventHubProperties.PartitionIds.Length}");
+            }
+
+            return eventHubProperties.PartitionIds[partitionInfo.FabricPartitionOrdinal];
+        }
+
+        private EventHubConsumerClient CreateConsumerClient()
+        {
+            EventHubConsumerClient client = null;
+            Exception lastException = null;
+            options.Logging?.Message("Creating event hub client");
+            lastException = RetryWrapper(() =>
+            {
+                client = new EventHubConsumerClient(
+                    this.consumerGroupName,
+                    this.eventHubConnection.ToString(),
+                    this.eventHubConnection.EventHubName);
+            });
+
+            if (client == null)
+            {
+                options.Logging?.Message("Out of retries event hub client");
+                throw new Exception("Out of retries creating EventHubClient", lastException);
+            }
+            
+            options.Logging?.Message("Event hub client OK");
+            return client;
         }
 
         private EventHubsException RetryWrapper(Action action)
@@ -346,9 +320,8 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 }
                 catch (AggregateException ae)
                 {
-                    if (ae.InnerException is EventHubsException)
+                    if (ae.InnerException is EventHubsException ehe)
                     {
-                        EventHubsException ehe = (EventHubsException)ae.InnerException;
                         if (!ehe.IsTransient)
                         {
                             throw ehe;
@@ -365,12 +338,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             return lastException;
         }
 
-        /// <summary>
-        /// From IPartitionReceiveHandler
-        /// </summary>
-        public int MaxBatchSize { get; set; }
-
-        async Task IPartitionReceiveHandler.ProcessEventsAsync(IEnumerable<EventData> events)
+        async Task ProcessEventsAsync(string hubPartitionId, IEnumerable<EventData> events)
         {
             IEnumerable<EventData> effectiveEvents = events ?? new List<EventData>(); // convert to empty list if events is null
 
@@ -386,10 +354,6 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 if (last != null)
                 {
                     this.partitionContext.SetOffsetAndSequenceNumber(last);
-                    if (this.options.EnableReceiverRuntimeMetric)
-                    {
-                        this.partitionContext.RuntimeInformation.Update(last);
-                    }
                 }
             }
 
@@ -399,120 +363,75 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             }
             catch (Exception e)
             {
-                EventProcessorEventSource.Current.Message($"Processing exception on {this.hubPartitionId}: {e}");
+                options.Logging?.Message($"Processing exception on {hubPartitionId}: {e}");
                 SafeProcessError(this.partitionContext, e);
             }
-
-            foreach (EventData ev in effectiveEvents)
-            {
-                ev.Dispose();
-            }
-        }
-
-        Task IPartitionReceiveHandler.ProcessErrorAsync(Exception error)
-        {
-            EventProcessorEventSource.Current.Message($"RECEIVE EXCEPTION on {this.hubPartitionId}: {error}");
-            SafeProcessError(this.partitionContext, error);
-            if (error is EventHubsException)
-            {
-                if (!(error as EventHubsException).IsTransient)
-                {
-                    this.internalFatalException = error;
-                    this.internalCanceller.Cancel();
-                }
-                // else don't cancel on transient errors
-            }
-            else
-            {
-                // All other exceptions are assumed fatal.
-                this.internalFatalException = error;
-                this.internalCanceller.Cancel();
-            }
-            return Task.CompletedTask;
         }
 
         private void SafeProcessError(PartitionContext context, Exception error)
         {
             try
             {
-                this.userEventProcessor.ProcessErrorAsync(context, error).Wait();
+                this.userEventProcessor.ProcessErrorAsync(context, error).Wait(linkedCancellationToken);
             }
             catch (Exception e)
             {
                 // The user's error notification method has thrown.
                 // Recursively notifying could easily cause an infinite loop, until the stack runs out.
                 // So do not notify, just log.
-                EventProcessorEventSource.Current.Message($"Error thrown by ProcessErrorASync: {e}");
+                options.Logging?.Message($"Error thrown by ProcessErrorASync: {e}");
             }
         }
 
-        private async Task CheckpointStartup(CancellationToken cancellationToken)
+        private async Task<long?> GetInitialOffsetFromCheckpointAtStartup(string hubPartitionId, CancellationToken cancellationToken)
         {
             // Set up store and get checkpoint, if any.
             await this.checkpointManager.CreateCheckpointStoreIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
-            Checkpoint checkpoint = await this.checkpointManager.CreateCheckpointIfNotExistsAsync(this.hubPartitionId, cancellationToken).ConfigureAwait(false);
+            Checkpoint checkpoint = await this.checkpointManager.CreateCheckpointIfNotExistsAsync(hubPartitionId, cancellationToken).ConfigureAwait(false);
             if (!checkpoint.Valid)
             {
                 // Not actually any existing checkpoint.
-                this.initialOffset = null;
-                EventProcessorEventSource.Current.Message("No checkpoint");
+                options.Logging?.Message("No checkpoint");
+                return null;
             }
-            else if (checkpoint.Version == 1)
+            
+            if (checkpoint.Version == 1)
             {
-                this.initialOffset = checkpoint.Offset;
-                EventProcessorEventSource.Current.Message($"Checkpoint provides initial offset {this.initialOffset}");
+                options.Logging?.Message($"Checkpoint provides initial offset {checkpoint.Offset}");
+                return checkpoint.Offset;
             }
             else
             {
                 // It's actually a later-version checkpoint but we don't know the details.
                 // Access it via the V1 interface and hope it does something sensible.
-                this.initialOffset = checkpoint.Offset;
-                EventProcessorEventSource.Current.Message($"Unexpected checkpoint version {checkpoint.Version}, provided initial offset {this.initialOffset}");
+                options.Logging?.Message($"Unexpected checkpoint version {checkpoint.Version}, provided initial offset {checkpoint.Offset}");
+                return checkpoint.Offset;
             }
         }
 
-        private async Task GetServicePartitionId(CancellationToken cancellationToken)
+        private async Task<PartitionInformation> GetServicePartitionId(CancellationToken cancellationToken)
         {
-            if (this.fabricPartitionOrdinal == -1)
-            {
-                IFabricPartitionLister lister = this.MockMode ?? new ServiceFabricPartitionLister();
+            IFabricPartitionLister lister = new ServiceFabricPartitionLister();
+            var info = new PartitionInformation(
+                await lister.GetServiceFabricPartitionCount(this.serviceFabricServiceName).ConfigureAwait(false),
+                await lister.GetServiceFabricPartitionOrdinal(this.serviceFabricPartitionId).ConfigureAwait(false));
 
-                this.servicePartitionCount = await lister.GetServiceFabricPartitionCount(this.serviceFabricServiceName).ConfigureAwait(false);
+            options.Logging?.Message($"Total partitions {info.ServicePartitionCount}");
+            options.Logging?.Message($"Partition ordinal {info.FabricPartitionOrdinal}");
 
-                this.fabricPartitionOrdinal = await lister.GetServiceFabricPartitionOrdinal(this.serviceFabricPartitionId).ConfigureAwait(false);
-
-                EventProcessorEventSource.Current.Message($"Total partitions {this.servicePartitionCount}");
-                EventProcessorEventSource.Current.Message($"Partition ordinal {this.fabricPartitionOrdinal}");
-                // TODO check that ordinal is not -1
-            }
+            return info;
         }
 
-        private void MetricsHandler()
+        private readonly struct PartitionInformation
         {
-            EventProcessorEventSource.Current.Message("METRIC reporter starting");
+            public int ServicePartitionCount { get; }
+            public int FabricPartitionOrdinal { get; }
 
-            while (!this.linkedCancellationToken.IsCancellationRequested)
+            public PartitionInformation(int partitionCount, int partitionOrdinal)
             {
-                Dictionary<string, int> userMetrics = this.userEventProcessor.GetLoadMetric(this.linkedCancellationToken, this.partitionContext);
-
-                try
-                {
-                    List<LoadMetric> reportableMetrics = new List<LoadMetric>();
-                    foreach (KeyValuePair<string, int> metric in userMetrics)
-                    {
-                        EventProcessorEventSource.Current.Message($"METRIC {metric.Key} for partition {this.partitionContext.PartitionId} is {metric.Value}");
-                        reportableMetrics.Add(new LoadMetric(metric.Key, metric.Value));
-                    }
-                    this.servicePartition.ReportLoad(reportableMetrics);
-                    Task.Delay(Constants.MetricReportingInterval, this.linkedCancellationToken).Wait(); // throws on cancel
-                }
-                catch (Exception e)
-                {
-                    EventProcessorEventSource.Current.Message($"METRIC partition {this.partitionContext.PartitionId} exception {e}");
-                }
+                ServicePartitionCount = partitionCount;
+                FabricPartitionOrdinal = partitionOrdinal;
             }
-
-            EventProcessorEventSource.Current.Message("METRIC reporter exiting");
         }
     }
 }

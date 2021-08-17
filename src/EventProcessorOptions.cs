@@ -1,4 +1,5 @@
 ﻿using System;
+using Azure.Messaging.EventHubs.Consumer;
 
 namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
@@ -21,10 +22,8 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             this.MaxBatchSize = 10;
             this.PrefetchCount = 300;
             this.ReceiveTimeout = TimeSpan.FromMinutes(1);
-            this.EnableReceiverRuntimeMetric = false;
             this.InvokeProcessorAfterReceiveTimeout = false;
-            this.InitialPositionProvider = partitionId => EventPosition.FromStart();
-            this.ClientReceiverOptions = null;
+            this.InitialPositionProvider = partitionId => EventPosition.Earliest;
             this.OnShutdown = null;
         }
 
@@ -47,12 +46,6 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         public TimeSpan ReceiveTimeout { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the runtime metric of a receiver is enabled (true) or disabled (false).
-        /// Defaults to false.
-        /// </summary>
-        public bool EnableReceiverRuntimeMetric { get; set; }
-
-        /// <summary>
         /// Determines whether IEventProcessor.OnEventsAsync is called when the Event Hubs receiver times out.
         /// Set to true to get calls with empty event list.
         /// Set to false to not get calls.
@@ -67,10 +60,9 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         public Func<string, EventPosition> InitialPositionProvider { get; set; }
 
         /// <summary>
-        /// ReceiverOptions used by the underlying Event Hubs client.
-        /// Defaults to null.
+        /// Exposes a logging interface
         /// </summary>
-        public ReceiverOptions ClientReceiverOptions { get; set; }
+        public EventProcessorLogging Logging { get; set; }
 
         /// <summary>
         /// TODO -- is this needed? It's called just before SFP.RunAsync throws out/returns to user code anyway.
@@ -84,6 +76,13 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             {
                 this.OnShutdown(shutdownException);
             }
+        }
+    }
+
+    public class EventProcessorLogging
+    {
+        internal void Message(string message)
+        {
         }
     }
 }

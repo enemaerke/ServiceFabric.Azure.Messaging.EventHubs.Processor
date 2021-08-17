@@ -7,21 +7,23 @@ using System.Threading.Tasks;
 
 namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 {
-    class ReliableDictionaryCheckpointManager : ICheckpointMananger
+    class ReliableDictionaryCheckpointManager : ICheckpointManager
     {
-        private IReliableStateManager reliableStateManager = null;
+        private readonly IReliableStateManager reliableStateManager = null;
+        private readonly EventProcessorLogging eventProcessorLogging;
         private IReliableDictionary<string, Dictionary<string, object>> store = null;
 
-        internal ReliableDictionaryCheckpointManager(IReliableStateManager rsm)
+        internal ReliableDictionaryCheckpointManager(IReliableStateManager rsm, EventProcessorLogging eventProcessorLogging)
         {
             this.reliableStateManager = rsm;
+            this.eventProcessorLogging = eventProcessorLogging;
         }
 
         public async Task<bool> CheckpointStoreExistsAsync(CancellationToken cancellationToken)
         {
             ConditionalValue<IReliableDictionary<string, Dictionary<string, object>>> tryStore = await 
                 this.reliableStateManager.TryGetAsync<IReliableDictionary<string, Dictionary<string, object>>>(Constants.CheckpointDictionaryName).ConfigureAwait(false);
-            EventProcessorEventSource.Current.Message($"CheckpointStoreExistsAsync = {tryStore.HasValue}");
+            eventProcessorLogging?.Message($"CheckpointStoreExistsAsync = {tryStore.HasValue}");
             return tryStore.HasValue;
         }
 
@@ -29,7 +31,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         {
             // Create or get access to the dictionary.
             this.store = await reliableStateManager.GetOrAddAsync<IReliableDictionary<string, Dictionary<string, object>>>(Constants.CheckpointDictionaryName).ConfigureAwait(false);
-            EventProcessorEventSource.Current.Message("CreateCheckpointStoreIfNotExistsAsync OK");
+            eventProcessorLogging?.Message("CreateCheckpointStoreIfNotExistsAsync OK");
             return true;
         }
 
@@ -42,7 +44,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 existingCheckpoint = new Checkpoint(1);
                 await PutWithRetry(partitionId, existingCheckpoint, cancellationToken).ConfigureAwait(false);
             }
-            EventProcessorEventSource.Current.Message("CreateCheckpointIfNotExists OK");
+            eventProcessorLogging?.Message("CreateCheckpointIfNotExists OK");
 
             return existingCheckpoint;
         }
@@ -61,7 +63,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         // Returns null if there is no entry for the given partition.
         private async Task<Checkpoint> GetWithRetry(string partitionId, CancellationToken cancellationToken)
         {
-            EventProcessorEventSource.Current.Message($"Getting checkpoint for {partitionId}");
+            eventProcessorLogging?.Message($"Getting checkpoint for {partitionId}");
 
             Checkpoint result = null;
             Exception lastException = null;
@@ -105,11 +107,11 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 
             if (result != null)
             {
-                EventProcessorEventSource.Current.Message($"Got checkpoint for {partitionId}: {result.Offset}//{result.SequenceNumber}");
+                eventProcessorLogging?.Message($"Got checkpoint for {partitionId}: {result.Offset}//{result.SequenceNumber}");
             }
             else
             {
-                EventProcessorEventSource.Current.Message($"No checkpoint found for {partitionId}: returning null");
+                eventProcessorLogging?.Message($"No checkpoint found for {partitionId}: returning null");
             }
 
             return result;
@@ -117,7 +119,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 
         private async Task PutWithRetry(string partitionId, Checkpoint checkpoint, CancellationToken cancellationToken)
         {
-            EventProcessorEventSource.Current.Message($"Setting checkpoint for {partitionId}: {checkpoint.Offset}//{checkpoint.SequenceNumber}");
+            eventProcessorLogging?.Message($"Setting checkpoint for {partitionId}: {checkpoint.Offset}//{checkpoint.SequenceNumber}");
 
             Exception lastException = null;
             for (int i = 0; i < Constants.RetryCount; i++)
@@ -150,7 +152,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 throw new Exception("Ran out of retries creating checkpoint", lastException);
             }
 
-            EventProcessorEventSource.Current.Message($"Set checkpoint for {partitionId} OK");
+            eventProcessorLogging?.Message($"Set checkpoint for {partitionId} OK");
         }
     }
 }

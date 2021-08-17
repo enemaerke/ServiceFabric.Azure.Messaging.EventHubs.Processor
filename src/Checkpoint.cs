@@ -25,7 +25,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// </summary>
         /// <param name="offset">Offset of highest-processed position.</param>
         /// <param name="sequenceNumber">Sequence number of highest-processed position.</param>
-        public Checkpoint(string offset, long sequenceNumber)
+        public Checkpoint(long offset, long sequenceNumber)
         {
             this.Version = 1;
             this.Offset = offset;
@@ -92,7 +92,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 switch (result.Version)
                 {
                     case 1:
-                        result.Offset = (string)dictionary[Constants.CheckpointPropertyOffsetV1];
+                        result.Offset = (long)dictionary[Constants.CheckpointPropertyOffsetV1];
                         result.SequenceNumber = (long)dictionary[Constants.CheckpointPropertySequenceNumberV1];
                         break;
 
@@ -106,38 +106,10 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         #endregion AllVersions
 
         #region Version1
-        //
-        // Methods and properties for Version==1
-        //
-
-        /// <summary>
-        /// Initialize an uninitialized instance as a version 1 checkpoint.
-        /// </summary>
-        /// <param name="offset">Offset of highest-processed position.</param>
-        /// <param name="sequenceNumber">Sequence number of highest-processed position.</param>
-        public void InitializeV1(string offset, long sequenceNumber)
-        {
-            this.Version = 1;
-
-            if (string.IsNullOrEmpty(offset))
-            {
-                throw new ArgumentException("offset must not be null or empty");
-            }
-            if (sequenceNumber < 0)
-            {
-                throw new ArgumentException("sequenceNumber must be >= 0");
-            }
-
-            this.Offset = offset;
-            this.SequenceNumber = sequenceNumber;
-
-            this.Valid = true;
-        }
-
         /// <summary>
         /// Offset of highest-processed position. Immutable after construction or initialization.
         /// </summary>
-        public string Offset { get; private set; }
+        public long Offset { get; private set; }
 
         /// <summary>
         /// Sequence number of highest-processed position. Immutable after construction or initialization.

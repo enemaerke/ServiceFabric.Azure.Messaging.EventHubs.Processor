@@ -6,13 +6,8 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
     {
         internal static readonly int RetryCount = 5;
 
-        internal static readonly int FixedReceiverEpoch = 0;
-
-        internal static readonly TimeSpan MetricReportingInterval = TimeSpan.FromMinutes(1.0);
-        internal static readonly string DefaultUserLoadMetricName = "CountOfPartitions";
-
         internal static readonly TimeSpan ReliableDictionaryTimeout = TimeSpan.FromSeconds(10.0); // arbitrary
-        internal static readonly string CheckpointDictionaryName = "EventProcessorCheckpointDictionary";
+        internal static readonly string CheckpointDictionaryName = "ServiceFabricProcessorCheckpointDictionary"; // changed name to avoid clash
         internal static readonly string CheckpointPropertyVersion = "version";
         internal static readonly string CheckpointPropertyValid = "valid";
         internal static readonly string CheckpointPropertyOffsetV1 = "offsetV1";

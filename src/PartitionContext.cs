@@ -8,7 +8,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
     /// </summary>
     public class PartitionContext
     {
-        private readonly ICheckpointMananger checkpointMananger;
+        private readonly ICheckpointManager checkpointManager;
 
         /// <summary>
         /// Construct an instance.
@@ -17,17 +17,17 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <param name="partitionId">Id of the partition for which the event processor is handling events.</param>
         /// <param name="eventHubPath">Name of the event hub which is the source of events.</param>
         /// <param name="consumerGroupName">Name of the consumer group on the event hub.</param>
-        /// <param name="checkpointMananger">The checkpoint manager instance to use.</param>
-        public PartitionContext(CancellationToken cancellationToken, string partitionId, string eventHubPath, string consumerGroupName, ICheckpointMananger checkpointMananger)
+        /// <param name="checkpointManager">The checkpoint manager instance to use.</param>
+        public PartitionContext(CancellationToken cancellationToken, string partitionId, string eventHubPath, string consumerGroupName, ICheckpointManager checkpointManager)
         {
             this.CancellationToken = cancellationToken;
             this.PartitionId = partitionId;
             this.EventHubPath = eventHubPath;
             this.ConsumerGroupName = consumerGroupName;
 
-            this.RuntimeInformation = new ReceiverRuntimeInformation(this.PartitionId);
+            //this.RuntimeInformation = new ReceiverRuntimeInformation(this.PartitionId);
 
-            this.checkpointMananger = checkpointMananger;
+            this.checkpointManager = checkpointManager;
         }
 
         /// <summary>
@@ -55,20 +55,20 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// Gets the approximate receiver runtime information for a logical partition of an Event Hub.
         /// To enable the setting, refer to <see cref="EventProcessorOptions.EnableReceiverRuntimeMetric"/>
         /// </summary>
-        public ReceiverRuntimeInformation RuntimeInformation
-        {
-            get;
-            internal set;
-        }
+        //public ReceiverRuntimeInformation RuntimeInformation
+        //{
+        //    get;
+        //    internal set;
+        //}
 
-        internal string Offset { get; set; }
+        internal long Offset { get; set; }
 
         internal long SequenceNumber { get; set; }
 
         internal void SetOffsetAndSequenceNumber(EventData eventData)
         {
-            this.Offset = eventData.SystemProperties.Offset;
-            this.SequenceNumber = eventData.SystemProperties.SequenceNumber;
+            this.Offset = eventData.Offset;
+            this.SequenceNumber = eventData.SequenceNumber;
         }
 
         /// <summary>
@@ -87,12 +87,12 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <returns></returns>
         public async Task CheckpointAsync(EventData eventData)
         {
-            await CheckpointAsync(new Checkpoint(eventData.SystemProperties.Offset, eventData.SystemProperties.SequenceNumber)).ConfigureAwait(false);
+            await CheckpointAsync(new Checkpoint(eventData.Offset, eventData.SequenceNumber)).ConfigureAwait(false);
         }
 
         private async Task CheckpointAsync(Checkpoint checkpoint)
         {
-            await this.checkpointMananger.UpdateCheckpointAsync(this.PartitionId, checkpoint, this.CancellationToken).ConfigureAwait(false);
+            await this.checkpointManager.UpdateCheckpointAsync(this.PartitionId, checkpoint, this.CancellationToken).ConfigureAwait(false);
         }
     }
 }

@@ -6,7 +6,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
     /// <summary>
     /// Interface for a checkpoint manager which persists Checkpoints.
     /// </summary>
-    public interface ICheckpointMananger
+    public interface ICheckpointManager
     {
         /// <summary>
         /// Does the checkpoint store exist?

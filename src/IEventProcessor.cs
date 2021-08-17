@@ -42,21 +42,5 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <param name="error"></param>
         /// <returns></returns>
         public abstract Task ProcessErrorAsync(PartitionContext context, Exception error);
-
-        /// <summary>
-        /// Called periodically to get user-supplied load metrics.
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        public virtual Dictionary<string, int> GetLoadMetric(CancellationToken cancellationToken, PartitionContext context)
-        {
-            // By default all partitions have a metric of named CountOfPartitions with value 1. If Service Fabric is configured to use this metric,
-            // it will balance primaries across nodes simply by the number of primaries on a node. This can be overridden to return
-            // more sophisticated metrics like number of events processed or CPU usage.
-            Dictionary<string, int> defaultMetric = new Dictionary<string, int>();
-            defaultMetric.Add(Constants.DefaultUserLoadMetricName, 1);
-            return defaultMetric;
-        }
     }
 }

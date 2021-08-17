@@ -10,9 +10,9 @@
    </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.ServiceFabric" />
-    <PackageReference Include="Microsoft.ServiceFabric.Data" />
-    <PackageReference Include="Microsoft.ServiceFabric.Services" />
-    <PackageReference Include="Azure.Messaging.EventHubs" />
+    <PackageReference Include="Microsoft.ServiceFabric" Version="8.1.321" />
+    <PackageReference Include="Microsoft.ServiceFabric.Data" Version="5.1.321" />
+    <PackageReference Include="Microsoft.ServiceFabric.Services" Version="5.1.321" />
+    <PackageReference Include="Azure.Messaging.EventHubs" Version="5.6.0" />
   </ItemGroup>
 </Project>

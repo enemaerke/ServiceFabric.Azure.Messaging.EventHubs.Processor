@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Fabric;
 using System.Fabric.Query;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
