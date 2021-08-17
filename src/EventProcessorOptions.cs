@@ -62,7 +62,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <summary>
         /// Exposes a logging interface
         /// </summary>
-        public EventProcessorLogging Logging { get; set; }
+        public EventProcessorLogging Logging { get; } = new EventProcessorLogging();
 
         /// <summary>
         /// TODO -- is this needed? It's called just before SFP.RunAsync throws out/returns to user code anyway.
@@ -76,13 +76,6 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             {
                 this.OnShutdown(shutdownException);
             }
-        }
-    }
-
-    public class EventProcessorLogging
-    {
-        internal void Message(string message)
-        {
         }
     }
 }

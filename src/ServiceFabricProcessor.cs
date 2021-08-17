@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.EventHubs.Consumer;
+using Azure.Messaging.EventHubs.Primitives;
 using Microsoft.ServiceFabric.Data;
 
 namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
@@ -175,14 +176,20 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 EventPosition initialPosition = GetEventPosition(initialOffSet, hubPartitionId); 
 
                 //
-                // Create batch receiver.
+                // Create batch receiver for the partition.
                 //
-                await using(var receiver = new Primitives.PartitionReceiver(
+                var partitionReceiverOptions = new PartitionReceiverOptions()
+                {
+                    PrefetchCount = options.PrefetchCount,
+                    TrackLastEnqueuedEventProperties = true,
+                };
+                await using(var receiver = new PartitionReceiver(
                     this.consumerGroupName,
                     hubPartitionId,
                     initialPosition,
                     this.eventHubConnection.ToString(),
-                    this.eventHubConnection.EventHubName))
+                    this.eventHubConnection.EventHubName,
+                    partitionReceiverOptions))
                 {
                     try
                     {
