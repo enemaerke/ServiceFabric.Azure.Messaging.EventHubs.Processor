@@ -19,6 +19,72 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             this.eventProcessorLogging = eventProcessorLogging;
         }
 
+        /// <summary>
+        /// Handling the migration from the previous ServiceFabricProcessor (https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/eventhub/Microsoft.Azure.EventHubs.ServiceFabricProcessor)
+        /// that was based on the Microsoft.Azure.EventHubs design to this new version that is based on Azure.Messaging.EventHubs design.
+        /// See here: https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/eventhub/README.md
+        /// </summary>
+        public async Task<bool> AttemptMigration(string partitionId, CancellationToken token)
+        {
+            if (this.store != null)
+            {
+                try
+                {
+                    ConditionalValue<IReliableDictionary<string, Dictionary<string, object>>> oldStore = await
+                        this.reliableStateManager
+                            .TryGetAsync<IReliableDictionary<string, Dictionary<string, object>>>(Constants.LegacyCheckpointDictionaryName)
+                            .ConfigureAwait(false);
+                    if (oldStore.HasValue)
+                    {
+                        // any old checkpoints live in the the reliable dictionary under another state-key but also
+                        // in a IReliableDictionary<string, Dictionary<string, object>> so this process is about extracting from the old store,
+                        // transforming and adding to the new store and deleting the old store
+                        using (ITransaction tx = this.reliableStateManager.CreateTransaction())
+                        {
+                            ConditionalValue<Dictionary<string, object>> rawCheckpoint = await
+                                oldStore.Value.TryGetValueAsync(tx, partitionId, Constants.ReliableDictionaryTimeout, token).ConfigureAwait(false);
+                            if (rawCheckpoint.HasValue)
+                            {
+                                // reading the old value
+                                var dictionary = rawCheckpoint.Value;
+                                int version = (int)dictionary[Constants.CheckpointPropertyVersion];
+                                bool valid = (bool)dictionary[Constants.CheckpointPropertyValid];
+                                string offset = (string)dictionary[Constants.CheckpointPropertyOffsetV1];
+                                long sequenceNumber = (long)dictionary[Constants.CheckpointPropertySequenceNumberV1];
+
+                                if (valid && long.TryParse(offset, out long newOffset))
+                                {
+                                    var newCheckpoint = new Checkpoint(newOffset, sequenceNumber);
+                                    Dictionary<string, object> putThis = newCheckpoint.ToDictionary();
+
+                                    // add migrated value and remove old in same transaction
+                                    await this.store.SetAsync(tx, partitionId, putThis, Constants.ReliableDictionaryTimeout, token)
+                                        .ConfigureAwait(false);
+                                    await oldStore.Value.TryRemoveAsync(tx, partitionId, Constants.ReliableDictionaryTimeout, token)
+                                        .ConfigureAwait(false);
+                                    await tx.CommitAsync().ConfigureAwait(false);
+
+                                    eventProcessorLogging.Message(
+                                        $"Found offset: {offset} and migrated it to: {newOffset} for partition: {partitionId}");
+                                    return true;
+                                }
+
+                                eventProcessorLogging.Message(
+                                    $"Failed to migrate existing offset: {offset} to a long value, was valid: {valid}, for partition: {partitionId}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception exc) when (!token.IsCancellationRequested)
+                {
+                    eventProcessorLogging.Message($"Failed during migrate of previous data. Message: {exc.Message}");
+                    throw;
+                }
+            }
+
+            return false;
+        }
+
         public async Task<bool> CheckpointStoreExistsAsync(CancellationToken cancellationToken)
         {
             ConditionalValue<IReliableDictionary<string, Dictionary<string, object>>> tryStore = await 

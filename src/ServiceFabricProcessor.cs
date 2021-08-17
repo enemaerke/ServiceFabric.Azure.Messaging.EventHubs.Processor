@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.EventHubs.Consumer;
@@ -208,10 +209,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                                 options.ReceiveTimeout,
                                 linkedCancellationToken);
 
-                            if (eventBatch != null)
-                            {
-                                await this.ProcessEventsAsync(hubPartitionId, eventBatch);
-                            }
+                            await this.ProcessEventsAsync(hubPartitionId, eventBatch);
                         }
                     }
                     catch (TaskCanceledException)
@@ -348,6 +346,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         async Task ProcessEventsAsync(string hubPartitionId, IEnumerable<EventData> events)
         {
             IEnumerable<EventData> effectiveEvents = events ?? new List<EventData>(); // convert to empty list if events is null
+            bool hasEvents = false;
 
             if (events != null)
             {
@@ -356,8 +355,10 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
                 EventData last = null;
                 while (scanner.MoveNext())
                 {
+                    hasEvents = true;
                     last = scanner.Current;
                 }
+
                 if (last != null)
                 {
                     this.partitionContext.SetOffsetAndSequenceNumber(last);
@@ -366,7 +367,16 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
 
             try
             {
-                await this.userEventProcessor.ProcessEventsAsync(this.linkedCancellationToken, this.partitionContext, effectiveEvents).ConfigureAwait(false);
+                if (hasEvents)
+                {
+                    await this.userEventProcessor.ProcessEventsAsync(this.linkedCancellationToken, this.partitionContext, effectiveEvents)
+                        .ConfigureAwait(false);
+                }
+                else if (options.InvokeProcessorAfterReceiveTimeout)
+                {
+                    await this.userEventProcessor.ProcessEventsAsync(this.linkedCancellationToken, this.partitionContext, Enumerable.Empty<EventData>())
+                        .ConfigureAwait(false);
+                }
             }
             catch (Exception e)
             {
@@ -394,6 +404,15 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         {
             // Set up store and get checkpoint, if any.
             await this.checkpointManager.CreateCheckpointStoreIfNotExistsAsync(cancellationToken).ConfigureAwait(false);
+            if (options.AttemptCheckpointMigrationFromOldFormat)
+            {
+                bool migrationSuccess = await this.checkpointManager.AttemptMigration(hubPartitionId, cancellationToken);
+                if (migrationSuccess)
+                {
+                    options.Logging?.Message($"Data migration completed for partition: {hubPartitionId}");
+                }
+            }
+
             Checkpoint checkpoint = await this.checkpointManager.CreateCheckpointIfNotExistsAsync(hubPartitionId, cancellationToken).ConfigureAwait(false);
             if (!checkpoint.Valid)
             {

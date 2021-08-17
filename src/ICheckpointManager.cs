@@ -46,5 +46,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task UpdateCheckpointAsync(string partitionId, Checkpoint checkpoint, CancellationToken cancellationToken);
+
+        Task<bool> AttemptMigration(string partitionId, CancellationToken cancellationToken);
     }
 }

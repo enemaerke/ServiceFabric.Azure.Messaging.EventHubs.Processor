@@ -25,6 +25,7 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
             this.InvokeProcessorAfterReceiveTimeout = false;
             this.InitialPositionProvider = partitionId => EventPosition.Earliest;
             this.OnShutdown = null;
+            AttemptCheckpointMigrationFromOldFormat = true;
         }
 
         /// <summary>
@@ -63,6 +64,13 @@ namespace Azure.Messaging.EventHubs.ServiceFabricProcessor
         /// Exposes a logging interface
         /// </summary>
         public EventProcessorLogging Logging { get; } = new EventProcessorLogging();
+
+        /// <summary>
+        /// Optionally handle the migration from the previous ServiceFabricProcessor (https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/eventhub/Microsoft.Azure.EventHubs.ServiceFabricProcessor)
+        /// that was based on the Microsoft.Azure.EventHubs design to this new version that is based on Azure.Messaging.EventHubs design.
+        /// See here: https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/eventhub/README.md
+        /// </summary>
+        public bool AttemptCheckpointMigrationFromOldFormat { get; set; }
 
         /// <summary>
         /// TODO -- is this needed? It's called just before SFP.RunAsync throws out/returns to user code anyway.

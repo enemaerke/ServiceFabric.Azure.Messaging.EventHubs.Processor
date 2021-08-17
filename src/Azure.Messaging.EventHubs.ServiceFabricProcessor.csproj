@@ -1,12 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1</TargetFrameworks>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
    <!-- Because Service Fabric is involved, force the platform to x64. -->
    <PropertyGroup>
      <Platform>x64</Platform>
      <PlatformTarget>x64</PlatformTarget>
+   </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netstandard2.1|x64'">
+     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+     <WarningsAsErrors />
    </PropertyGroup>
 
   <ItemGroup>
